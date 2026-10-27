@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: math-tutor
+    runtime: docker
+    plan: free
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false

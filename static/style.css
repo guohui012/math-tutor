@@ -1,0 +1,62 @@
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent2: #22d3ee;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.topbar { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+.logo { font-size: 20px; font-weight: 700; }
+.logo .sig { color: var(--accent2); }
+.sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 12px; }
+.input-card, .card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; margin-bottom: 12px;
+}
+textarea {
+  width: 100%; min-height: 96px; resize: vertical;
+  background: #0b1120; color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px; font-size: 16px; line-height: 1.5;
+  font-family: inherit;
+}
+textarea:focus { outline: none; border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip {
+  background: #0b1120; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 11px; font-size: 12px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip:active { background: #243049; }
+.btn-row { display: flex; gap: 10px; margin-top: 12px; }
+button.primary, button.secondary {
+  flex: 1; padding: 13px 10px; font-size: 16px; border: none; border-radius: 12px;
+  cursor: pointer; font-weight: 600; -webkit-tap-highlight-color: transparent;
+}
+button.primary { background: var(--accent); color: #fff; }
+button.secondary { background: #334155; color: var(--text); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.card h2 { font-size: 13px; color: var(--muted); margin: 0 0 10px; font-weight: 600; letter-spacing: .5px; }
+.row { margin-bottom: 10px; }
+.row:last-child { margin-bottom: 0; }
+.label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.math { font-size: 17px; padding: 4px 0; }
+.math.result { color: var(--accent2); font-size: 19px; }
+.note { color: #fbbf24; font-size: 13px; }
+.muted { color: var(--muted); font-size: 12px; margin-top: 6px; word-break: break-all; }
+.err { color: #f87171; font-size: 14px; white-space: pre-wrap; }
+.thinking { color: var(--muted); font-style: italic; }
+.raw-stream { white-space: pre-wrap; color: var(--muted); font-size: 14px; }
+.explain-html { font-size: 15px; }
+.explain-html strong { color: #f8fafc; }
+.explain-html .katex-display { margin: 10px 0; overflow-x: auto; overflow-y: hidden; }
+.katex { color: inherit; }
