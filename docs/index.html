@@ -83,8 +83,9 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <h2>② 原理讲解（DeepSeek）</h2>
     <div id="explain-body"></div>
     <div id="follow-box" hidden style="margin-top:10px">
-      <textarea id="follow" rows="2" placeholder="哪里不明白？直接追问，会结合上面的上下文…"></textarea>
-      <div class="btn-row"><button id="btn-follow" class="secondary">💬 发送追问</button></div>
+      <div style="font-size:13px;color:var(--accent2);margin-bottom:6px;font-weight:600">💬 对话模式：下面继续追问，我会结合上文回答</div>
+      <textarea id="follow" rows="2" placeholder="对哪里不明白？直接问…"></textarea>
+      <div class="btn-row"><button id="btn-follow" class="secondary">发送追问</button></div>
     </div>
   </section>
 </main>
@@ -102,7 +103,7 @@ var qEl=document.getElementById("q"),computeCard=document.getElementById("comput
     fileInput=document.getElementById("file"),followBox=document.getElementById("follow-box"),
     followEl=document.getElementById("follow"),btnFollow=document.getElementById("btn-follow");
 
-var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 原理优先：先讲清本题涉及的核心概念/定理，再讲\"为什么这样想、为什么这样做\"。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**核心概念** → **思路分析** → **详细步骤** → **易错点与推广**。除 **粗体** 和 LaTeX 公式外，不要使用任何 Markdown 语法（不要用 # 标题、- 列表、代码块）。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
+var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 思路/方法优先：先讲清这类问题的**总体方法策略**与"为什么往这个方向想"——例如 PDE 常化归为 ODE（分离变量/特征线）、多元化归一元、复杂积分化归已知积分表；讲的是解题思维，不只是机械步骤。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**方法思想**（这类题的整体策略，讲清"怎么想"） → **详细步骤** → **易错点与推广**。除 **粗体** 和 LaTeX 公式外，不要使用任何 Markdown 语法（不要用 # 标题、- 列表、代码块）。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
 
 var EXAMPLES=["解方程 x^2 - 5x + 6 = 0","积分 exp(-x^2) from 0 to inf","极限 sin(x)/x as x->0",
   "求导 x*sin(x)","特征值 [[1,2],[3,4]]","行列式 [[1,2],[3,4]]","factorint 2^67 - 1","totient 100",
@@ -137,7 +138,10 @@ function renderMath(tex){try{return katex.renderToString(tex,{throwOnError:false
 function renderInline(t){
   var h=esc(t);
   h=h.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
-  h=h.replace(/\$([^$\n]+?)\$|\\\(([^\\\n]+?)\\\)/g,function(f,a,b){var s=(a||b||"").trim();try{return katex.renderToString(s,{throwOnError:false});}catch(e){return f;}});
+  h=h.replace(/\$([^$\n]+?)\$|\\\(([^\\\n]+?)\\\)/g,function(f,a,b){
+    var s=((a||b||"").trim()).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&").replace(/&quot;/g,'"');
+    try{return katex.renderToString(s,{throwOnError:false});}catch(e){return f;}
+  });
   h=h.replace(/\n/g,"<br>");return h;
 }
 function renderRich(text){
