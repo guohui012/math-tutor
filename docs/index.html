@@ -48,7 +48,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <body>
 <header class="topbar">
   <div class="logo"><span class="sig">∑</span> 数学助教</div>
-  <div class="sub">严谨计算 · 讲透原理（SymPy 跑在手机里，DeepSeek 直接调）</div>
+  <div class="sub">严谨计算 · 讲透原理（DeepSeek 直连，无需服务器）</div>
 </header>
 
 <main class="wrap">
@@ -74,13 +74,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
     </div>
   </section>
 
-  <section class="card" id="compute-card" hidden>
-    <h2>① 精确计算（SymPy，本地运行）</h2>
-    <div id="compute-body"></div>
-  </section>
-
   <section class="card" id="explain-card" hidden>
-    <h2>② 原理讲解（DeepSeek）</h2>
+    <h2>讲解与对话（DeepSeek）</h2>
     <div id="explain-body"></div>
   </section>
 
@@ -96,8 +91,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <script src="./katex/katex.min.js"></script>
 <script>
 "use strict";
-var qEl=document.getElementById("q"),computeCard=document.getElementById("compute-card"),
-    explainCard=document.getElementById("explain-card"),computeBody=document.getElementById("compute-body"),
+var qEl=document.getElementById("q"),
+    explainCard=document.getElementById("explain-card"),
     explainBody=document.getElementById("explain-body"),btnBoth=document.getElementById("btn-both"),
     btnExplain=document.getElementById("btn-explain"),keyEl=document.getElementById("key"),
     saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus"),
@@ -112,28 +107,7 @@ var EXAMPLES=["解方程 x^2 - 5x + 6 = 0","积分 exp(-x^2) from 0 to inf","极
   "求导 x*sin(x)","特征值 [[1,2],[3,4]]","行列式 [[1,2],[3,4]]","factorint 2^67 - 1","totient 100",
   "证明 √2 是无理数","解释极限的 ε-δ 定义"];
 
-// ---------- Pyodide（本地 SymPy） ----------
-var pyodide=null,pyodideLoading=null;
-function loadScript(src){return new Promise(function(res,rej){var s=document.createElement("script");s.src=src;s.onload=res;s.onerror=function(){rej(new Error("加载失败 "+src))};document.head.appendChild(s);});}
-async function ensurePyodide(){
-  if(pyodide) return pyodide;
-  if(!pyodideLoading){
-    pyodideLoading=(async function(){
-      if(!window.loadPyodide){await loadScript("https://fastly.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");}
-      var p=await window.loadPyodide({indexURL:"https://fastly.jsdelivr.net/pyodide/v0.26.4/full/"});
-      await p.loadPackage("sympy");
-      var src=await (await fetch("solver.py")).text();
-      p.runPython("import json\n"+src);
-      pyodide=p;return p;
-    })();
-  }
-  return pyodideLoading;
-}
-async function compute(query){
-  var p=await ensurePyodide();
-  var jsonStr=p.runPython("json.dumps(compute("+JSON.stringify(query)+"), ensure_ascii=False)");
-  return JSON.parse(jsonStr);
-}
+// （本地 SymPy 引擎已移除，计算交给 DeepSeek，避免页面卡死）
 
 // ---------- 渲染 ----------
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -160,14 +134,12 @@ function renderRich(text){
 
 // ---------- DeepSeek ----------
 function getKey(){return (localStorage.getItem("ds_key")||"").trim();}
-function buildMessages(query,comp){
+function buildMessages(query,mode){
   var sys={role:"system",content:SYSTEM_PROMPT},user;
-  if(comp&&comp.ok){
-    var extra=comp.approx?("\n- 数值近似："+comp.approx):"";
-    var note=comp.note?("\n- 说明："+comp.note):"";
-    user="问题："+query+"\n\n计算引擎（SymPy）的精确结果如下，请基于它讲解原理与步骤：\n- 输入理解："+(comp.interpreted||"")+"\n- 结果："+(comp.result||"")+extra+note+"\n\n请讲解。";
+  if(mode==="both"){
+    user="问题："+query+"\n\n请先严格地计算/求解（给出完整推导步骤、每一步的依据和最终答案），再讲这类题的方法思想与易错点。";
   }else{
-    user="问题："+query+"\n\n请严谨地讲解（概念、原理、推导）。";
+    user="问题："+query+"\n\n请严谨讲解概念、原理、方法思想（先讲整体思路，再讲细节）。";
   }
   return [sys,{role:"user",content:user}];
 }
@@ -205,31 +177,11 @@ async function streamInto(messages){
 // ---------- UI ----------
 function renderChips(){var c=document.getElementById("chips");EXAMPLES.forEach(function(e){var b=document.createElement("button");b.className="chip";b.textContent=e;b.onclick=function(){qEl.value=e;qEl.focus();};c.appendChild(b);});}
 function setLoading(b){btnBoth.disabled=b;btnExplain.disabled=b;}
-function renderCompute(c){
-  computeCard.hidden=false;
-  if(!c||!c.ok){
-    computeBody.innerHTML='<div class="note">💬 未识别为可精确计算的式子（概念/证明/文字题），直接交给讲解引擎。</div>'+(c&&c.error?('<div class="muted">'+esc(c.error)+"</div>"):"");
-    return;
-  }
-  var h="";
-  if(c.interpreted)h+='<div class="row"><span class="label">输入理解</span><div class="math">'+renderMath(c.interpreted)+"</div></div>";
-  if(c.factor)h+='<div class="row"><span class="label">因式分解</span><div class="math">'+renderMath(c.factor)+"</div></div>";
-  h+='<div class="row"><span class="label">精确结果</span><div class="math result">'+renderMath(c.result)+"</div></div>";
-  if(c.approx)h+='<div class="row"><span class="label">数值近似</span><div class="math">≈ '+esc(c.approx)+"</div></div>";
-  if(c.note)h+='<div class="row note">'+esc(c.note)+"</div>";
-  computeBody.innerHTML=h;
-}
 async function onSubmit(mode){
   var query=qEl.value.trim();if(!query){qEl.focus();return;}
   setLoading(true);
-  var comp=null;
-  if(mode==="both"){
-    computeCard.hidden=false;computeBody.innerHTML='<div class="thinking">正在加载本地数学引擎（首次约需十几秒）…</div>';
-    try{comp=await compute(query);}catch(e){comp={ok:false,error:String(e)};}
-    renderCompute(comp);
-  }else{computeCard.hidden=true;}
-  explainCard.hidden=false;explainBody.innerHTML="";followBox.hidden=false;
-  chat=buildMessages(query,comp); // [system, user]
+  explainCard.hidden=false;explainBody.innerHTML="";
+  chat=buildMessages(query,mode);
   appendUser(query);
   var ans=await streamInto(chat.slice(0));
   if(ans!==null)chat.push({role:"assistant",content:ans});
@@ -240,7 +192,7 @@ async function onFollowup(){
   followEl.value="";setLoading(true);
   if(chat.length===0){
     explainCard.hidden=false;explainBody.innerHTML="";
-    chat=buildMessages(f,null);
+    chat=buildMessages(f,"explain");
   }else{
     chat.push({role:"user",content:f});
   }
