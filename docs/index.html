@@ -242,19 +242,28 @@ function compressImage(file,maxW,quality){
     img.src=url;
   });
 }
+var OCR_MODELS=["qwen3-vl-plus","qwen-vl-plus","qwen-vl-max"];
 async function ocrImage(key,base64,mime){
-  var resp=await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",{
-    method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
-    body:JSON.stringify({model:"qwen-vl-plus",messages:[{role:"user",content:[
-      {type:"text",text:"识别这张图片里的数学题目，只输出题目本身（用 LaTeX 或纯文本，优先 LaTeX），不要解答、不要任何解释。"},
-      {type:"image_url",image_url:{url:"data:"+mime+";base64,"+base64}}
-    ]}]})
-  });
-  if(!resp.ok){var t=await resp.text();throw new Error("OCR HTTP "+resp.status+"："+t.slice(0,150));}
-  var j=await resp.json();
-  var c=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-  if(!c)throw new Error("未返回内容");
-  return c;
+  var lastErr="";
+  for(var i=0;i<OCR_MODELS.length;i++){
+    var resp=await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",{
+      method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+      body:JSON.stringify({model:OCR_MODELS[i],messages:[{role:"user",content:[
+        {type:"text",text:"识别这张图片里的数学题目，只输出题目本身（用 LaTeX 或纯文本，优先 LaTeX），不要解答、不要任何解释。"},
+        {type:"image_url",image_url:{url:"data:"+mime+";base64,"+base64}}
+      ]}]})
+    });
+    if(resp.ok){
+      var j=await resp.json();
+      var c=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
+      if(c)return c;
+      lastErr="空返回";
+    }else{
+      var t=await resp.text();
+      lastErr="HTTP "+resp.status+"："+t.slice(0,120);
+    }
+  }
+  throw new Error(lastErr||"OCR 失败");
 }
 
 refreshKey();refreshVKey();renderChips();
