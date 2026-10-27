@@ -7,7 +7,7 @@
 <title>数学助教</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#6366f1;--accent2:#22d3ee}
 *{box-sizing:border-box}html,body{margin:0;padding:0}
@@ -76,7 +76,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://fastly.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script>
 "use strict";
 var qEl=document.getElementById("q"),computeCard=document.getElementById("compute-card"),
@@ -98,8 +98,8 @@ async function ensurePyodide(){
   if(pyodide) return pyodide;
   if(!pyodideLoading){
     pyodideLoading=(async function(){
-      if(!window.loadPyodide){await loadScript("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");}
-      var p=await window.loadPyodide();
+      if(!window.loadPyodide){await loadScript("https://fastly.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");}
+      var p=await window.loadPyodide({indexURL:"https://fastly.jsdelivr.net/pyodide/v0.26.4/full/"});
       await p.loadPackage("sympy");
       var src=await (await fetch("solver.py")).text();
       p.runPython("import json\n"+src);
