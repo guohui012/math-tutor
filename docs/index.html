@@ -47,8 +47,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </head>
 <body>
 <header class="topbar">
-  <div class="logo"><span class="sig">∑</span> 数学助教</div>
-  <div class="sub">严谨计算 · 讲透原理（DeepSeek 直连，无需服务器）</div>
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div class="logo"><span class="sig">∑</span> 数学助教</div>
+      <div class="sub">严谨计算 · 讲透原理（DeepSeek 直连）</div>
+    </div>
+    <button id="btn-history" style="background:#334155;color:var(--text);border:none;border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer;white-space:nowrap">📚 回顾</button>
+  </div>
 </header>
 
 <main class="wrap">
@@ -185,10 +190,13 @@ async function onSubmit(mode){
   var query=qEl.value.trim();if(!query){qEl.focus();return;}
   setLoading(true);
   explainCard.hidden=false;explainBody.innerHTML="";
+  currentConv={id:Date.now(),title:query,category:categoryFor(mode)};
+  currentTurns=[];
   chat=buildMessages(query,mode);
   appendUser(query);
   var ans=await streamInto(chat.slice(0));
-  if(ans!==null)chat.push({role:"assistant",content:ans});
+  if(ans!==null){chat.push({role:"assistant",content:ans});currentTurns.push({q:query,a:ans});}
+  saveCurrentConv();
   setLoading(false);
 }
 async function onFollowup(){
@@ -196,16 +204,78 @@ async function onFollowup(){
   followEl.value="";setLoading(true);
   if(chat.length===0){
     explainCard.hidden=false;explainBody.innerHTML="";
+    currentConv={id:Date.now(),title:f,category:"知识点"};
+    currentTurns=[];
     chat=buildMessages(f,"explain");
   }else{
     chat.push({role:"user",content:f});
   }
   appendUser(f);
   var ans=await streamInto(chat.slice(0));
-  if(ans!==null)chat.push({role:"assistant",content:ans});
+  if(ans!==null){chat.push({role:"assistant",content:ans});currentTurns.push({q:f,a:ans});}
+  saveCurrentConv();
   setLoading(false);
 }
 btnFollow.onclick=onFollowup;
+
+// ---------- 对话记忆 & 回顾 ----------
+var currentConv=null,currentTurns=[];
+function categoryFor(mode){return mode==="explore"?"思维":(mode==="both"?"题目":"知识点");}
+function loadConvs(){try{return JSON.parse(localStorage.getItem("conversations")||"[]");}catch(e){return [];}}
+function saveConvs(l){localStorage.setItem("conversations",JSON.stringify(l));}
+function saveCurrentConv(){
+  if(!currentConv||currentTurns.length===0)return;
+  var list=loadConvs(),i=list.findIndex(function(c){return c.id===currentConv.id;});
+  var e=i>=0?list[i]:{id:currentConv.id,createdAt:Date.now()};
+  e.title=currentConv.title;e.category=currentConv.category;e.turns=currentTurns.slice(0);e.updatedAt=Date.now();
+  if(i>=0)list[i]=e;else list.unshift(e);
+  saveConvs(list);
+}
+function renderHistory(){
+  var list=loadConvs(),el=document.getElementById("history-list");
+  if(list.length===0){el.innerHTML='<div class="muted">还没有历史对话，先去提问吧。</div>';return;}
+  var cats=["思维","题目","知识点"],html="";
+  cats.forEach(function(cat){
+    var items=list.filter(function(c){return c.category===cat;});
+    if(!items.length)return;
+    html+='<div style="font-weight:700;color:var(--accent2);margin:14px 0 6px;font-size:15px">'+cat+'</div>';
+    items.forEach(function(c){
+      var d=new Date(c.updatedAt);
+      html+='<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.title)+'</div>'
+        +'<div class="muted" style="margin-top:2px;font-size:12px">'+(d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours()+':'+String(d.getMinutes()).padStart(2,"0")+' · '+(c.turns?c.turns.length:0)+' 轮</div></div>'
+        +'<button data-open="'+c.id+'" style="background:#334155;color:var(--text);border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer">查看</button>'
+        +'<button data-del="'+c.id+'" style="background:#7f1d1d;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer">删</button>'
+        +'</div>';
+    });
+  });
+  el.innerHTML=html;
+  el.querySelectorAll("[data-open]").forEach(function(b){b.onclick=function(){
+    var id=Number(b.getAttribute("data-open"));
+    var c=loadConvs().find(function(x){return x.id===id;});
+    if(c)openConv(c);
+  };});
+  el.querySelectorAll("[data-del]").forEach(function(b){b.onclick=function(){
+    var id=Number(b.getAttribute("data-del"));
+    saveConvs(loadConvs().filter(function(x){return x.id!==id;}));
+    renderHistory();
+  };});
+}
+function openConv(c){
+  document.getElementById("history-overlay").hidden=true;
+  explainCard.hidden=false;explainBody.innerHTML="";
+  currentConv={id:c.id,title:c.title,category:c.category};
+  currentTurns=(c.turns||[]).slice(0);
+  chat=[{role:"system",content:(c.category==="思维"?SYSTEM_EXPLORE:SYSTEM_PROMPT)}];
+  (c.turns||[]).forEach(function(t){
+    appendUser(t.q);
+    var el=document.createElement("div");el.className="explain-html";el.innerHTML=renderRich(t.a);explainBody.appendChild(el);
+    chat.push({role:"user",content:t.q});chat.push({role:"assistant",content:t.a});
+  });
+  window.scrollTo(0,0);
+}
+document.getElementById("btn-history").onclick=function(){renderHistory();document.getElementById("history-overlay").hidden=false;};
+document.getElementById("btn-history-close").onclick=function(){document.getElementById("history-overlay").hidden=true;};
 
 // ---------- Key 管理 ----------
 function refreshKey(){
@@ -272,7 +342,14 @@ async function ocrImage(key,base64,mime){
 }
 
 refreshKey();refreshVKey();renderChips();
-if("serviceWorker" in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){regs.forEach(function(r){r.unregister();});});}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
 </script>
+<div id="history-overlay" hidden style="position:fixed;inset:0;background:var(--bg);z-index:50;overflow-y:auto;padding:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0;font-size:18px">📚 回顾历史</h2>
+    <button id="btn-history-close" style="background:#334155;color:var(--text);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:14px">关闭</button>
+  </div>
+  <div id="history-list"></div>
+</div>
 </body>
 </html>
