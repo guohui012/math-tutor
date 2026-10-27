@@ -51,14 +51,21 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
 <main class="wrap">
   <div class="keybar">
-    <input id="key" type="password" placeholder="粘贴 DeepSeek API Key（sk-...，只存你手机里）" autocomplete="off">
-    <button id="savekey">保存 Key</button>
+    <input id="key" type="password" placeholder="DeepSeek Key（解题讲解，必填）" autocomplete="off">
+    <button id="savekey">保存</button>
     <span class="ks" id="keystatus"></span>
+  </div>
+  <div class="keybar">
+    <input id="vkey" type="password" placeholder="阿里云百炼 Key（拍照识别，可选）" autocomplete="off">
+    <button id="savevkey">保存</button>
+    <span class="ks" id="vkeystatus"></span>
   </div>
 
   <section class="input-card">
     <textarea id="q" rows="3" placeholder="输入数学问题，例如：&#10;解方程 x^2 - 5x + 6 = 0&#10;积分 exp(-x^2) from 0 to inf&#10;证明 √2 是无理数&#10;解释极限的 ε-δ 定义"></textarea>
     <div class="chips" id="chips"></div>
+    <button id="btn-photo" class="secondary" style="width:100%;margin-top:10px">📷 拍照 / 传图识别题目</button>
+    <input type="file" id="file" accept="image/*" capture="environment" hidden>
     <div class="btn-row">
       <button id="btn-both" class="primary">🔢 求解并讲解</button>
       <button id="btn-explain" class="secondary">💡 只讲原理</button>
@@ -83,7 +90,10 @@ var qEl=document.getElementById("q"),computeCard=document.getElementById("comput
     explainCard=document.getElementById("explain-card"),computeBody=document.getElementById("compute-body"),
     explainBody=document.getElementById("explain-body"),btnBoth=document.getElementById("btn-both"),
     btnExplain=document.getElementById("btn-explain"),keyEl=document.getElementById("key"),
-    saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus");
+    saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus"),
+    vkeyEl=document.getElementById("vkey"),saveVKey=document.getElementById("savevkey"),
+    vkeyStatus=document.getElementById("vkeystatus"),btnPhoto=document.getElementById("btn-photo"),
+    fileInput=document.getElementById("file");
 
 var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 原理优先：先讲清本题涉及的核心概念/定理，再讲\"为什么这样想、为什么这样做\"。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**核心概念** → **思路分析** → **详细步骤** → **易错点与推广**。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
 
@@ -214,7 +224,53 @@ saveKey.onclick=function(){localStorage.setItem("ds_key",keyEl.value.trim());ref
 btnBoth.onclick=function(){onSubmit("both");};
 btnExplain.onclick=function(){onSubmit("explain");};
 
-refreshKey();renderChips();
+// ---------- 拍照识别（阿里云 Qwen-VL） ----------
+function getVKey(){return (localStorage.getItem("ds_vkey")||"").trim();}
+function refreshVKey(){var k=getVKey();vkeyEl.value=k;vkeyStatus.textContent=k?"已保存 ✓":"未设置";}
+saveVKey.onclick=function(){localStorage.setItem("ds_vkey",vkeyEl.value.trim());refreshVKey();};
+btnPhoto.onclick=function(){fileInput.click();};
+fileInput.onchange=async function(){
+  var f=fileInput.files[0];if(!f)return;
+  var vk=getVKey();if(!vk){alert("请先填入上方「阿里云百炼 Key」才能拍照识别");return;}
+  qEl.value="正在识别图片…";qEl.disabled=true;
+  try{
+    var dataUrl=await compressImage(f,1280,0.85);
+    var mime=(dataUrl.split(";")[0].split(":")[1]||"image/jpeg");
+    var base64=dataUrl.split(",")[1];
+    var text=await ocrImage(vk,base64,mime);
+    qEl.value=text;qEl.disabled=false;
+  }catch(e){qEl.value="";qEl.disabled=false;alert("识别失败："+(e.message||e));}
+  fileInput.value="";
+};
+function compressImage(file,maxW,quality){
+  return new Promise(function(res,rej){
+    var img=new Image(),url=URL.createObjectURL(file);
+    img.onload=function(){
+      var w=img.naturalWidth,h=img.naturalHeight,scale=Math.min(1,maxW/Math.max(w,h));
+      var c=document.createElement("canvas");c.width=Math.round(w*scale);c.height=Math.round(h*scale);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",quality));
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error("图片加载失败"));};
+    img.src=url;
+  });
+}
+async function ocrImage(key,base64,mime){
+  var resp=await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",{
+    method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    body:JSON.stringify({model:"qwen-vl-max",messages:[{role:"user",content:[
+      {type:"text",text:"识别这张图片里的数学题目，只输出题目本身（用 LaTeX 或纯文本，优先 LaTeX），不要解答、不要任何解释。"},
+      {type:"image_url",image_url:{url:"data:"+mime+";base64,"+base64}}
+    ]}]})
+  });
+  if(!resp.ok){var t=await resp.text();throw new Error("OCR HTTP "+resp.status+"："+t.slice(0,150));}
+  var j=await resp.json();
+  var c=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
+  if(!c)throw new Error("未返回内容");
+  return c;
+}
+
+refreshKey();refreshVKey();renderChips();
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
 </script>
 </body>
