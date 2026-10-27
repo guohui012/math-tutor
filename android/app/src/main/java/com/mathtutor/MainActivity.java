@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         web.setWebViewClient(new WebViewClient());
         web.loadUrl("https://guohui012.github.io/math-tutor/");
         setContentView(web);
