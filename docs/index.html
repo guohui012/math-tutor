@@ -82,10 +82,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <section class="card" id="explain-card" hidden>
     <h2>② 原理讲解（DeepSeek）</h2>
     <div id="explain-body"></div>
-    <div id="follow-box" hidden style="margin-top:10px">
-      <div style="font-size:13px;color:var(--accent2);margin-bottom:6px;font-weight:600">💬 对话模式：下面继续追问，我会结合上文回答</div>
-      <textarea id="follow" rows="2" placeholder="对哪里不明白？直接问…"></textarea>
-      <div class="btn-row"><button id="btn-follow" class="secondary">发送追问</button></div>
+  </section>
+
+  <section class="card">
+    <h2>💬 对话 / 追问</h2>
+    <div id="follow-box">
+      <textarea id="follow" rows="2" placeholder="对哪里不明白？或直接问任何数学问题（结合上文上下文）…"></textarea>
+      <div class="btn-row"><button id="btn-follow" class="secondary">发送</button></div>
     </div>
   </section>
 </main>
@@ -235,7 +238,13 @@ async function onSubmit(mode){
 async function onFollowup(){
   var f=followEl.value.trim();if(!f)return;
   followEl.value="";setLoading(true);
-  chat.push({role:"user",content:f});appendUser(f);
+  if(chat.length===0){
+    explainCard.hidden=false;explainBody.innerHTML="";
+    chat=buildMessages(f,null);
+  }else{
+    chat.push({role:"user",content:f});
+  }
+  appendUser(f);
   var ans=await streamInto(chat.slice(0));
   if(ans!==null)chat.push({role:"assistant",content:ans});
   setLoading(false);

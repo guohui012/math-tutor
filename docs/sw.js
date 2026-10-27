@@ -1,4 +1,4 @@
-const CACHE = "math-tutor-web-v4";
+const CACHE = "math-tutor-web-v5";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./solver.py", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
