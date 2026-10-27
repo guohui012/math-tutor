@@ -20,12 +20,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK platform & build-tools
+      - name: Accept Android SDK licenses (safety)
         run: |
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          SDKM=$(find /usr/local/lib/android/sdk/cmdline-tools -name sdkmanager 2>/dev/null | head -1)
+          if [ -n "$SDKM" ]; then yes | "$SDKM" --licenses > /dev/null 2>&1 || true; fi
 
       - name: Download Gradle 8.2
         run: |
