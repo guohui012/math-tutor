@@ -7,7 +7,7 @@
 <title>数学助教</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="./katex/katex.min.css">
 <style>
 :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#6366f1;--accent2:#22d3ee}
 *{box-sizing:border-box}html,body{margin:0;padding:0}
@@ -41,6 +41,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .explain-html{font-size:15px}.explain-html strong{color:#f8fafc}
 .explain-html .katex-display{margin:10px 0;overflow-x:auto;overflow-y:hidden}
 .katex{color:inherit}
+.chat-user{background:#0b1120;border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin:8px 0;color:#a5b4fc;font-size:14px;white-space:pre-wrap}
+.chat-assistant{margin:4px 0 14px}
 </style>
 </head>
 <body>
@@ -80,10 +82,14 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <section class="card" id="explain-card" hidden>
     <h2>② 原理讲解（DeepSeek）</h2>
     <div id="explain-body"></div>
+    <div id="follow-box" hidden style="margin-top:10px">
+      <textarea id="follow" rows="2" placeholder="哪里不明白？直接追问，会结合上面的上下文…"></textarea>
+      <div class="btn-row"><button id="btn-follow" class="secondary">💬 发送追问</button></div>
+    </div>
   </section>
 </main>
 
-<script src="https://fastly.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="./katex/katex.min.js"></script>
 <script>
 "use strict";
 var qEl=document.getElementById("q"),computeCard=document.getElementById("compute-card"),
@@ -93,9 +99,10 @@ var qEl=document.getElementById("q"),computeCard=document.getElementById("comput
     saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus"),
     vkeyEl=document.getElementById("vkey"),saveVKey=document.getElementById("savevkey"),
     vkeyStatus=document.getElementById("vkeystatus"),btnPhoto=document.getElementById("btn-photo"),
-    fileInput=document.getElementById("file");
+    fileInput=document.getElementById("file"),followBox=document.getElementById("follow-box"),
+    followEl=document.getElementById("follow"),btnFollow=document.getElementById("btn-follow");
 
-var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 原理优先：先讲清本题涉及的核心概念/定理，再讲\"为什么这样想、为什么这样做\"。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**核心概念** → **思路分析** → **详细步骤** → **易错点与推广**。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
+var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 原理优先：先讲清本题涉及的核心概念/定理，再讲\"为什么这样想、为什么这样做\"。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**核心概念** → **思路分析** → **详细步骤** → **易错点与推广**。除 **粗体** 和 LaTeX 公式外，不要使用任何 Markdown 语法（不要用 # 标题、- 列表、代码块）。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
 
 var EXAMPLES=["解方程 x^2 - 5x + 6 = 0","积分 exp(-x^2) from 0 to inf","极限 sin(x)/x as x->0",
   "求导 x*sin(x)","特征值 [[1,2],[3,4]]","行列式 [[1,2],[3,4]]","factorint 2^67 - 1","totient 100",
@@ -157,11 +164,11 @@ function buildMessages(query,comp){
   }
   return [sys,{role:"user",content:user}];
 }
-async function streamExplain(query,comp,onDelta){
+async function streamMessages(messages,onDelta){
   var key=getKey();if(!key)throw new Error("请先在上方填入 DeepSeek API Key");
   var resp=await fetch("https://api.deepseek.com/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
-    body:JSON.stringify({model:"deepseek-chat",messages:buildMessages(query,comp),stream:true,temperature:0.1})
+    body:JSON.stringify({model:"deepseek-chat",messages:messages,stream:true,temperature:0.1})
   });
   if(!resp.ok){var t=await resp.text();throw new Error("DeepSeek 返回 "+resp.status+"："+t.slice(0,200));}
   var reader=resp.body.getReader(),decoder=new TextDecoder(),buf="";
@@ -176,6 +183,16 @@ async function streamExplain(query,comp,onDelta){
       try{var o=JSON.parse(data);var d=o.choices&&o.choices[0]&&o.choices[0].delta;if(d&&d.content)onDelta(d.content);}catch(e){}
     }
   }
+}
+var chat=[]; // 完整对话消息列表（含 system 开头）
+function appendUser(t){var d=document.createElement("div");d.className="chat-user";d.textContent=t;explainBody.appendChild(d);}
+async function streamInto(messages){
+  var text="",raw=document.createElement("div");raw.className="raw-stream";explainBody.appendChild(raw);
+  try{await streamMessages(messages,function(d){text+=d;raw.textContent=text;});}
+  catch(e){raw.textContent="⚠️ "+(e.message||e);return null;}
+  raw.remove();
+  var el=document.createElement("div");el.className="explain-html";el.innerHTML=text?renderRich(text):"（未返回内容）";
+  explainBody.appendChild(el);return text;
 }
 
 // ---------- UI ----------
@@ -200,21 +217,26 @@ async function onSubmit(mode){
   setLoading(true);
   var comp=null;
   if(mode==="both"){
-    computeCard.hidden=false;computeBody.innerHTML='<div class="thinking">正在加载本地数学引擎（首次约需十几秒，之后秒开）…</div>';
+    computeCard.hidden=false;computeBody.innerHTML='<div class="thinking">正在加载本地数学引擎（首次约需十几秒）…</div>';
     try{comp=await compute(query);}catch(e){comp={ok:false,error:String(e)};}
     renderCompute(comp);
   }else{computeCard.hidden=true;}
-  explainCard.hidden=false;explainBody.innerHTML='<div class="thinking">💭 正在讲解…</div>';
-  var text="";var raw=document.createElement("div");raw.className="raw-stream";explainBody.innerHTML="";explainBody.appendChild(raw);
-  try{
-    await streamExplain(query,comp,function(d){text+=d;raw.textContent=text;});
-    var el=document.createElement("div");el.className="explain-html";el.innerHTML=text?renderRich(text):'<div class="err">（未返回内容）</div>';
-    explainBody.innerHTML="";explainBody.appendChild(el);
-  }catch(e){
-    explainBody.innerHTML='<div class="err">'+esc(String(e.message||e))+"</div>";
-  }
+  explainCard.hidden=false;explainBody.innerHTML="";followBox.hidden=false;
+  chat=buildMessages(query,comp); // [system, user]
+  appendUser(query);
+  var ans=await streamInto(chat.slice(0));
+  if(ans!==null)chat.push({role:"assistant",content:ans});
   setLoading(false);
 }
+async function onFollowup(){
+  var f=followEl.value.trim();if(!f)return;
+  followEl.value="";setLoading(true);
+  chat.push({role:"user",content:f});appendUser(f);
+  var ans=await streamInto(chat.slice(0));
+  if(ans!==null)chat.push({role:"assistant",content:ans});
+  setLoading(false);
+}
+btnFollow.onclick=onFollowup;
 
 // ---------- Key 管理 ----------
 function refreshKey(){
@@ -258,7 +280,7 @@ function compressImage(file,maxW,quality){
 async function ocrImage(key,base64,mime){
   var resp=await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
-    body:JSON.stringify({model:"qwen-vl-max",messages:[{role:"user",content:[
+    body:JSON.stringify({model:"qwen-vl-plus",messages:[{role:"user",content:[
       {type:"text",text:"识别这张图片里的数学题目，只输出题目本身（用 LaTeX 或纯文本，优先 LaTeX），不要解答、不要任何解释。"},
       {type:"image_url",image_url:{url:"data:"+mime+";base64,"+base64}}
     ]}]})
