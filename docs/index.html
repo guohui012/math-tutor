@@ -27,7 +27,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chip{background:#0b1120;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .chip:active{background:#243049}
-.btn-row{display:flex;gap:10px;margin-top:12px}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 button.primary,button.secondary{flex:1;padding:13px 10px;font-size:16px;border:none;border-radius:12px;cursor:pointer;font-weight:600;-webkit-tap-highlight-color:transparent}
 button.primary{background:var(--accent);color:#fff}button.secondary{background:#334155;color:var(--text)}
 button:disabled{opacity:.5;cursor:not-allowed}
@@ -71,6 +71,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <div class="btn-row">
       <button id="btn-both" class="primary">🔢 求解并讲解</button>
       <button id="btn-explain" class="secondary">💡 只讲原理</button>
+      <button id="btn-explore" class="secondary">🧠 思维探索</button>
     </div>
   </section>
 
@@ -94,7 +95,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 var qEl=document.getElementById("q"),
     explainCard=document.getElementById("explain-card"),
     explainBody=document.getElementById("explain-body"),btnBoth=document.getElementById("btn-both"),
-    btnExplain=document.getElementById("btn-explain"),keyEl=document.getElementById("key"),
+    btnExplain=document.getElementById("btn-explain"),btnExplore=document.getElementById("btn-explore"),keyEl=document.getElementById("key"),
     saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus"),
     vkeyEl=document.getElementById("vkey"),saveVKey=document.getElementById("savevkey"),
     vkeyStatus=document.getElementById("vkeystatus"),btnPhoto=document.getElementById("btn-photo"),
@@ -102,10 +103,11 @@ var qEl=document.getElementById("q"),
     followEl=document.getElementById("follow"),btnFollow=document.getElementById("btn-follow");
 
 var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 思路/方法优先：先讲清这类问题的**总体方法策略**与「为什么往这个方向想」——例如 PDE 常化归为 ODE（分离变量/特征线）、多元化归一元、复杂积分化归已知积分表；讲的是解题思维，不只是机械步骤。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**方法思想**（这类题的整体策略，讲清「怎么想」） → **详细步骤** → **易错点与推广**。除 **粗体** 和 LaTeX 公式外，不要使用任何 Markdown 语法（不要用 # 标题、- 列表、代码块）。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
+var SYSTEM_EXPLORE="你现在是一位数学导师，和学生一起「探索数学思维」。\n\n学生可能会提出模糊、奇怪、甚至「说不清哪里奇怪」的问题或直觉（比如「为什么幂级数在某一点的性质似乎决定了全局信息」）。你的任务是：\n1. 先接住这个直觉，帮学生把「感到奇怪的地方」说清楚、说精确。\n2. 点出这个直觉背后对应的正式数学概念/定理并给出名称——例如「你感受到的这个性质叫解析延拓 / 全纯函数的刚性」。\n3. 讲清「为什么会有这种性质」（内在机制），以及它有多强、边界在哪（反例、失效条件）。\n4. 用苏格拉底式引导继续往下想：可追问、可联想相关概念，一步步探索，不要一次性倾倒。\n5. 数学严格，但语气是「一起想」，允许学生表述不精确，你负责把它精确化。\n6. 公式用 LaTeX（$...$ / $$...$$），中文讲解，只用 **粗体** 和 LaTeX，不用其他 Markdown。";
 
 var EXAMPLES=["解方程 x^2 - 5x + 6 = 0","积分 exp(-x^2) from 0 to inf","极限 sin(x)/x as x->0",
   "求导 x*sin(x)","特征值 [[1,2],[3,4]]","行列式 [[1,2],[3,4]]","factorint 2^67 - 1","totient 100",
-  "证明 √2 是无理数","解释极限的 ε-δ 定义"];
+  "证明 √2 是无理数","为什么幂级数在一点的性质几乎决定了全局信息？","解释极限的 ε-δ 定义"];
 
 // （本地 SymPy 引擎已移除，计算交给 DeepSeek，避免页面卡死）
 
@@ -135,9 +137,11 @@ function renderRich(text){
 // ---------- DeepSeek ----------
 function getKey(){return (localStorage.getItem("ds_key")||"").trim();}
 function buildMessages(query,mode){
-  var sys={role:"system",content:SYSTEM_PROMPT},user;
+  var sys={role:"system",content:(mode==="explore"?SYSTEM_EXPLORE:SYSTEM_PROMPT)},user;
   if(mode==="both"){
     user="问题："+query+"\n\n请先严格地计算/求解（给出完整推导步骤、每一步的依据和最终答案），再讲这类题的方法思想与易错点。";
+  }else if(mode==="explore"){
+    user="我的一个（可能很模糊的）数学直觉/疑问："+query+"\n\n请陪我一起探索：帮我把这个直觉说清楚，并点出它背后对应的正式概念与更深的追问。";
   }else{
     user="问题："+query+"\n\n请严谨讲解概念、原理、方法思想（先讲整体思路，再讲细节）。";
   }
@@ -176,7 +180,7 @@ async function streamInto(messages){
 
 // ---------- UI ----------
 function renderChips(){var c=document.getElementById("chips");EXAMPLES.forEach(function(e){var b=document.createElement("button");b.className="chip";b.textContent=e;b.onclick=function(){qEl.value=e;qEl.focus();};c.appendChild(b);});}
-function setLoading(b){btnBoth.disabled=b;btnExplain.disabled=b;}
+function setLoading(b){btnBoth.disabled=b;btnExplain.disabled=b;btnExplore.disabled=b;}
 async function onSubmit(mode){
   var query=qEl.value.trim();if(!query){qEl.focus();return;}
   setLoading(true);
@@ -210,6 +214,7 @@ function refreshKey(){
 saveKey.onclick=function(){localStorage.setItem("ds_key",keyEl.value.trim());refreshKey();};
 btnBoth.onclick=function(){onSubmit("both");};
 btnExplain.onclick=function(){onSubmit("explain");};
+btnExplore.onclick=function(){onSubmit("explore");};
 
 // ---------- 拍照识别（阿里云 Qwen-VL） ----------
 function getVKey(){return (localStorage.getItem("ds_vkey")||"").trim();}
