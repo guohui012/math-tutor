@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.loadUrl("https://guohui012.github.io/math-tutor/");
+        web.loadUrl("https://guohui012.github.io/math-tutor/?t=" + System.currentTimeMillis());
         setContentView(web);
     }
 
