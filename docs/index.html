@@ -242,7 +242,7 @@ function compressImage(file,maxW,quality){
     img.src=url;
   });
 }
-var OCR_MODELS=["qwen3-vl-plus","qwen-vl-plus","qwen-vl-max"];
+var OCR_MODELS=["qwen3.7-plus","qwen3.7-max","qwen3-vl-plus"];
 async function ocrImage(key,base64,mime){
   var lastErr="";
   for(var i=0;i<OCR_MODELS.length;i++){
