@@ -164,7 +164,7 @@ async function streamMessages(messages,onDelta){
   var key=getKey();if(!key)throw new Error("请先在上方填入 DeepSeek API Key");
   var resp=await fetch("https://api.deepseek.com/chat/completions",{
     method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
-    body:JSON.stringify({model:"deepseek-chat",messages:messages,stream:true,temperature:0.1})
+    body:JSON.stringify({model:"deepseek-v4-flash",messages:messages,stream:true,temperature:0.1})
   });
   if(!resp.ok){var t=await resp.text();throw new Error("DeepSeek 返回 "+resp.status+"："+t.slice(0,200));}
   var reader=resp.body.getReader(),decoder=new TextDecoder(),buf="";
