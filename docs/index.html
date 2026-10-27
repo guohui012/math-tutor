@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>数学助教</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#6366f1;--accent2:#22d3ee}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.topbar{padding:14px 16px 10px;border-bottom:1px solid var(--border)}
+.logo{font-size:20px;font-weight:700}.logo .sig{color:var(--accent2)}
+.sub{color:var(--muted);font-size:12px;margin-top:2px}
+.wrap{max-width:720px;margin:0 auto;padding:12px}
+.keybar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.keybar input{flex:1;background:#0b1120;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-size:13px;font-family:inherit;min-width:0}
+.keybar input:focus{outline:none;border-color:var(--accent)}
+.keybar button{background:#334155;color:var(--text);border:none;border-radius:10px;padding:9px 13px;font-size:13px;cursor:pointer;white-space:nowrap}
+.keybar .ks{font-size:12px;color:#4ade80;white-space:nowrap}
+.card,.input-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
+textarea{width:100%;min-height:96px;resize:vertical;background:#0b1120;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:16px;line-height:1.5;font-family:inherit}
+textarea:focus{outline:none;border-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:#0b1120;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.chip:active{background:#243049}
+.btn-row{display:flex;gap:10px;margin-top:12px}
+button.primary,button.secondary{flex:1;padding:13px 10px;font-size:16px;border:none;border-radius:12px;cursor:pointer;font-weight:600;-webkit-tap-highlight-color:transparent}
+button.primary{background:var(--accent);color:#fff}button.secondary{background:#334155;color:var(--text)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.card h2{font-size:13px;color:var(--muted);margin:0 0 10px;font-weight:600;letter-spacing:.5px}
+.row{margin-bottom:10px}.row:last-child{margin-bottom:0}
+.label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.math{font-size:17px;padding:4px 0}.math.result{color:var(--accent2);font-size:19px}
+.note{color:#fbbf24;font-size:13px}.muted{color:var(--muted);font-size:12px;margin-top:6px;word-break:break-all}
+.err{color:#f87171;font-size:14px;white-space:pre-wrap}.thinking{color:var(--muted);font-style:italic}
+.raw-stream{white-space:pre-wrap;color:var(--muted);font-size:14px}
+.explain-html{font-size:15px}.explain-html strong{color:#f8fafc}
+.explain-html .katex-display{margin:10px 0;overflow-x:auto;overflow-y:hidden}
+.katex{color:inherit}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="sig">∑</span> 数学助教</div>
+  <div class="sub">严谨计算 · 讲透原理（SymPy 跑在手机里，DeepSeek 直接调）</div>
+</header>
+
+<main class="wrap">
+  <div class="keybar">
+    <input id="key" type="password" placeholder="粘贴 DeepSeek API Key（sk-...，只存你手机里）" autocomplete="off">
+    <button id="savekey">保存 Key</button>
+    <span class="ks" id="keystatus"></span>
+  </div>
+
+  <section class="input-card">
+    <textarea id="q" rows="3" placeholder="输入数学问题，例如：&#10;解方程 x^2 - 5x + 6 = 0&#10;积分 exp(-x^2) from 0 to inf&#10;证明 √2 是无理数&#10;解释极限的 ε-δ 定义"></textarea>
+    <div class="chips" id="chips"></div>
+    <div class="btn-row">
+      <button id="btn-both" class="primary">🔢 求解并讲解</button>
+      <button id="btn-explain" class="secondary">💡 只讲原理</button>
+    </div>
+  </section>
+
+  <section class="card" id="compute-card" hidden>
+    <h2>① 精确计算（SymPy，本地运行）</h2>
+    <div id="compute-body"></div>
+  </section>
+
+  <section class="card" id="explain-card" hidden>
+    <h2>② 原理讲解（DeepSeek）</h2>
+    <div id="explain-body"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script>
+"use strict";
+var qEl=document.getElementById("q"),computeCard=document.getElementById("compute-card"),
+    explainCard=document.getElementById("explain-card"),computeBody=document.getElementById("compute-body"),
+    explainBody=document.getElementById("explain-body"),btnBoth=document.getElementById("btn-both"),
+    btnExplain=document.getElementById("btn-explain"),keyEl=document.getElementById("key"),
+    saveKey=document.getElementById("savekey"),keyStatus=document.getElementById("keystatus");
+
+var SYSTEM_PROMPT="你是一位治学严谨的大学数学教授，目标是把数学讲透、帮学生真正理解，而不是只给答案。\n\n请严格遵循：\n1. 严格性：每一步推导都注明依据（定理、定义、恒等变形），不跳步、不臆造、不糊弄。\n2. 原理优先：先讲清本题涉及的核心概念/定理，再讲\"为什么这样想、为什么这样做\"。\n3. 结构清晰：用 **粗体小标题** 分节，顺序：**核心概念** → **思路分析** → **详细步骤** → **易错点与推广**。\n4. 公式用 LaTeX：行内 $...$，独立公式 $$...$$。讲解用中文。\n5. 若题目附带了\"计算引擎（SymPy）的精确结果\"，必须以该结果为准讲解；不要自行重算、不要给出与之矛盾的结论。若你判断该结果可疑，明确指出并说明理由。\n6. 主动指出常见概念误区；结尾可给一道同类变式题（不直接给答案）。\n7. 只讲数学本身，不编造来源或引用。";
+
+var EXAMPLES=["解方程 x^2 - 5x + 6 = 0","积分 exp(-x^2) from 0 to inf","极限 sin(x)/x as x->0",
+  "求导 x*sin(x)","特征值 [[1,2],[3,4]]","行列式 [[1,2],[3,4]]","factorint 2^67 - 1","totient 100",
+  "证明 √2 是无理数","解释极限的 ε-δ 定义"];
+
+// ---------- Pyodide（本地 SymPy） ----------
+var pyodide=null,pyodideLoading=null;
+function loadScript(src){return new Promise(function(res,rej){var s=document.createElement("script");s.src=src;s.onload=res;s.onerror=function(){rej(new Error("加载失败 "+src))};document.head.appendChild(s);});}
+async function ensurePyodide(){
+  if(pyodide) return pyodide;
+  if(!pyodideLoading){
+    pyodideLoading=(async function(){
+      if(!window.loadPyodide){await loadScript("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");}
+      var p=await window.loadPyodide();
+      await p.loadPackage("sympy");
+      var src=await (await fetch("solver.py")).text();
+      p.runPython("import json\n"+src);
+      pyodide=p;return p;
+    })();
+  }
+  return pyodideLoading;
+}
+async function compute(query){
+  var p=await ensurePyodide();
+  var jsonStr=p.runPython("json.dumps(compute("+JSON.stringify(query)+"), ensure_ascii=False)");
+  return JSON.parse(jsonStr);
+}
+
+// ---------- 渲染 ----------
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function renderMath(tex){try{return katex.renderToString(tex,{throwOnError:false});}catch(e){return esc(tex);}}
+function renderInline(t){
+  var h=esc(t);
+  h=h.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  h=h.replace(/\$([^$\n]+?)\$|\\\(([^\\\n]+?)\\\)/g,function(f,a,b){var s=(a||b||"").trim();try{return katex.renderToString(s,{throwOnError:false});}catch(e){return f;}});
+  h=h.replace(/\n/g,"<br>");return h;
+}
+function renderRich(text){
+  var out=[],re=/\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]/g,last=0,m;
+  while((m=re.exec(text))){
+    out.push(renderInline(text.slice(last,m.index)));
+    var s=(m[1]||m[2]||"").trim();
+    try{out.push(katex.renderToString(s,{displayMode:true,throwOnError:false}));}catch(e){out.push(esc(m[0]));}
+    last=m.index+m[0].length;
+  }
+  out.push(renderInline(text.slice(last)));return out.join("");
+}
+
+// ---------- DeepSeek ----------
+function getKey(){return (localStorage.getItem("ds_key")||"").trim();}
+function buildMessages(query,comp){
+  var sys={role:"system",content:SYSTEM_PROMPT},user;
+  if(comp&&comp.ok){
+    var extra=comp.approx?("\n- 数值近似："+comp.approx):"";
+    var note=comp.note?("\n- 说明："+comp.note):"";
+    user="问题："+query+"\n\n计算引擎（SymPy）的精确结果如下，请基于它讲解原理与步骤：\n- 输入理解："+(comp.interpreted||"")+"\n- 结果："+(comp.result||"")+extra+note+"\n\n请讲解。";
+  }else{
+    user="问题："+query+"\n\n请严谨地讲解（概念、原理、推导）。";
+  }
+  return [sys,{role:"user",content:user}];
+}
+async function streamExplain(query,comp,onDelta){
+  var key=getKey();if(!key)throw new Error("请先在上方填入 DeepSeek API Key");
+  var resp=await fetch("https://api.deepseek.com/chat/completions",{
+    method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    body:JSON.stringify({model:"deepseek-chat",messages:buildMessages(query,comp),stream:true,temperature:0.1})
+  });
+  if(!resp.ok){var t=await resp.text();throw new Error("DeepSeek 返回 "+resp.status+"："+t.slice(0,200));}
+  var reader=resp.body.getReader(),decoder=new TextDecoder(),buf="";
+  while(true){
+    var r=await reader.read();if(r.done)break;
+    buf+=decoder.decode(r.value,{stream:true});
+    var idx;
+    while((idx=buf.indexOf("\n"))!==-1){
+      var line=buf.slice(0,idx).trim();buf=buf.slice(idx+1);
+      if(line.indexOf("data:")!==0)continue;
+      var data=line.slice(5).trim();if(data==="[DONE]")return;
+      try{var o=JSON.parse(data);var d=o.choices&&o.choices[0]&&o.choices[0].delta;if(d&&d.content)onDelta(d.content);}catch(e){}
+    }
+  }
+}
+
+// ---------- UI ----------
+function renderChips(){var c=document.getElementById("chips");EXAMPLES.forEach(function(e){var b=document.createElement("button");b.className="chip";b.textContent=e;b.onclick=function(){qEl.value=e;qEl.focus();};c.appendChild(b);});}
+function setLoading(b){btnBoth.disabled=b;btnExplain.disabled=b;}
+function renderCompute(c){
+  computeCard.hidden=false;
+  if(!c||!c.ok){
+    computeBody.innerHTML='<div class="note">💬 未识别为可精确计算的式子（概念/证明/文字题），直接交给讲解引擎。</div>'+(c&&c.error?('<div class="muted">'+esc(c.error)+"</div>"):"");
+    return;
+  }
+  var h="";
+  if(c.interpreted)h+='<div class="row"><span class="label">输入理解</span><div class="math">'+renderMath(c.interpreted)+"</div></div>";
+  if(c.factor)h+='<div class="row"><span class="label">因式分解</span><div class="math">'+renderMath(c.factor)+"</div></div>";
+  h+='<div class="row"><span class="label">精确结果</span><div class="math result">'+renderMath(c.result)+"</div></div>";
+  if(c.approx)h+='<div class="row"><span class="label">数值近似</span><div class="math">≈ '+esc(c.approx)+"</div></div>";
+  if(c.note)h+='<div class="row note">'+esc(c.note)+"</div>";
+  computeBody.innerHTML=h;
+}
+async function onSubmit(mode){
+  var query=qEl.value.trim();if(!query){qEl.focus();return;}
+  setLoading(true);
+  var comp=null;
+  if(mode==="both"){
+    computeCard.hidden=false;computeBody.innerHTML='<div class="thinking">正在加载本地数学引擎（首次约需十几秒，之后秒开）…</div>';
+    try{comp=await compute(query);}catch(e){comp={ok:false,error:String(e)};}
+    renderCompute(comp);
+  }else{computeCard.hidden=true;}
+  explainCard.hidden=false;explainBody.innerHTML='<div class="thinking">💭 正在讲解…</div>';
+  var text="";var raw=document.createElement("div");raw.className="raw-stream";explainBody.innerHTML="";explainBody.appendChild(raw);
+  try{
+    await streamExplain(query,comp,function(d){text+=d;raw.textContent=text;});
+    var el=document.createElement("div");el.className="explain-html";el.innerHTML=text?renderRich(text):'<div class="err">（未返回内容）</div>';
+    explainBody.innerHTML="";explainBody.appendChild(el);
+  }catch(e){
+    explainBody.innerHTML='<div class="err">'+esc(String(e.message||e))+"</div>";
+  }
+  setLoading(false);
+}
+
+// ---------- Key 管理 ----------
+function refreshKey(){
+  var k=getKey();keyEl.value=k;keyStatus.textContent=k?"已保存 ✓":"未设置";
+}
+saveKey.onclick=function(){localStorage.setItem("ds_key",keyEl.value.trim());refreshKey();};
+btnBoth.onclick=function(){onSubmit("both");};
+btnExplain.onclick=function(){onSubmit("explain");};
+
+refreshKey();renderChips();
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
+</script>
+</body>
+</html>
